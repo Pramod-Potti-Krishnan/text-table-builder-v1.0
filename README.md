@@ -2,6 +2,14 @@
 
 LLM-powered content generation microservice for presentation slides. Generates rich HTML text and tables with context retention and word count control.
 
+## 🌐 Production Deployment
+
+**Live API**: https://web-production-e3796.up.railway.app
+
+**Status**: ✅ Operational
+**Provider**: Railway
+**Region**: US East
+
 ## 🚀 Features
 
 - **Rich HTML Text Generation**
@@ -39,6 +47,8 @@ LLM-powered content generation microservice for presentation slides. Generates r
 
 ## 📋 Table of Contents
 
+- [Production Deployment](#production-deployment)
+- [External Service Integration](#external-service-integration)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Quick Start](#quick-start)
@@ -49,6 +59,509 @@ LLM-powered content generation microservice for presentation slides. Generates r
 - [Development](#development)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## 🔌 External Service Integration
+
+This section shows how to integrate the Text & Table Builder API into your external services (Content Orchestrator, presentation builders, etc.).
+
+### 🌐 Production API Endpoint
+
+```
+Base URL: https://web-production-e3796.up.railway.app
+```
+
+### 🔑 Quick Integration Guide
+
+#### 1. **Python Integration (Recommended for Content Orchestrator)**
+
+```python
+import requests
+from typing import Dict, Any, List
+
+class TextTableBuilderClient:
+    """Client for Text & Table Builder API."""
+
+    def __init__(self, base_url: str = "https://web-production-e3796.up.railway.app"):
+        self.base_url = base_url
+        self.api_base = f"{base_url}/api/v1"
+
+    def generate_text(
+        self,
+        presentation_id: str,
+        slide_id: str,
+        slide_number: int,
+        topics: List[str],
+        narrative: str,
+        context: Dict[str, Any],
+        constraints: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Generate HTML text content for a slide.
+
+        Args:
+            presentation_id: Unique presentation identifier
+            slide_id: Slide identifier
+            slide_number: Slide number in sequence
+            topics: List of key points to cover
+            narrative: Overall slide narrative
+            context: Presentation context (theme, audience, slide_title)
+            constraints: Generation constraints (max_characters)
+
+        Returns:
+            Dictionary with 'content' (HTML) and 'metadata'
+        """
+        endpoint = f"{self.api_base}/generate/text"
+
+        payload = {
+            "presentation_id": presentation_id,
+            "slide_id": slide_id,
+            "slide_number": slide_number,
+            "topics": topics,
+            "narrative": narrative,
+            "context": context,
+            "constraints": constraints
+        }
+
+        response = requests.post(endpoint, json=payload, timeout=30)
+        response.raise_for_status()
+        return response.json()
+
+    def generate_table(
+        self,
+        presentation_id: str,
+        slide_id: str,
+        slide_number: int,
+        description: str,
+        data: Dict[str, Any],
+        context: Dict[str, Any],
+        constraints: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate HTML table from data.
+
+        Args:
+            presentation_id: Unique presentation identifier
+            slide_id: Slide identifier
+            slide_number: Slide number in sequence
+            description: What the table should show
+            data: Raw data to structure into table
+            context: Presentation context (theme, audience, slide_title)
+            constraints: Table constraints (max_rows, max_columns)
+
+        Returns:
+            Dictionary with 'html' (table markup) and 'metadata'
+        """
+        endpoint = f"{self.api_base}/generate/table"
+
+        payload = {
+            "presentation_id": presentation_id,
+            "slide_id": slide_id,
+            "slide_number": slide_number,
+            "description": description,
+            "data": data,
+            "context": context,
+            "constraints": constraints or {}
+        }
+
+        response = requests.post(endpoint, json=payload, timeout=30)
+        response.raise_for_status()
+        return response.json()
+
+    def get_session_info(self, presentation_id: str) -> Dict[str, Any]:
+        """Get session information for a presentation."""
+        endpoint = f"{self.api_base}/session/{presentation_id}"
+        response = requests.get(endpoint)
+        response.raise_for_status()
+        return response.json()
+
+    def delete_session(self, presentation_id: str) -> Dict[str, Any]:
+        """Delete a presentation session."""
+        endpoint = f"{self.api_base}/session/{presentation_id}"
+        response = requests.delete(endpoint)
+        response.raise_for_status()
+        return response.json()
+
+    def health_check(self) -> Dict[str, Any]:
+        """Check API health status."""
+        endpoint = f"{self.base_url}/health"
+        response = requests.get(endpoint)
+        response.raise_for_status()
+        return response.json()
+
+
+# Usage Example
+if __name__ == "__main__":
+    client = TextTableBuilderClient()
+
+    # Check API health
+    health = client.health_check()
+    print(f"API Status: {health['status']}")
+
+    # Generate text content
+    text_result = client.generate_text(
+        presentation_id="pres_001",
+        slide_id="slide_001",
+        slide_number=1,
+        topics=["Revenue growth", "Market expansion"],
+        narrative="Strong Q3 performance",
+        context={
+            "theme": "professional",
+            "audience": "executives",
+            "slide_title": "Q3 Results"
+        },
+        constraints={
+            "max_characters": 250
+        }
+    )
+
+    print(f"Generated HTML: {text_result['content']}")
+    print(f"Word Count: {text_result['metadata']['word_count']}")
+```
+
+#### 2. **JavaScript/TypeScript Integration**
+
+```typescript
+interface TextGenerationRequest {
+  presentation_id: string;
+  slide_id: string;
+  slide_number: number;
+  topics: string[];
+  narrative: string;
+  context: {
+    theme: string;
+    audience: string;
+    slide_title: string;
+  };
+  constraints: {
+    max_characters: number;
+  };
+}
+
+interface GeneratedText {
+  content: string;
+  metadata: {
+    word_count: number;
+    target_word_count: number;
+    html_tags_used: string[];
+    generation_time_ms: number;
+    model_used: string;
+  };
+}
+
+class TextTableBuilderClient {
+  private baseUrl: string;
+  private apiBase: string;
+
+  constructor(baseUrl: string = "https://web-production-e3796.up.railway.app") {
+    this.baseUrl = baseUrl;
+    this.apiBase = `${baseUrl}/api/v1`;
+  }
+
+  async generateText(request: TextGenerationRequest): Promise<GeneratedText> {
+    const response = await fetch(`${this.apiBase}/generate/text`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async generateTable(request: any): Promise<any> {
+    const response = await fetch(`${this.apiBase}/generate/table`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API Error: ${response.statusText}`);
+    }
+
+    return await response.json();
+  }
+
+  async healthCheck(): Promise<{ status: string; version: string }> {
+    const response = await fetch(`${this.baseUrl}/health`);
+    return await response.json();
+  }
+}
+
+// Usage
+const client = new TextTableBuilderClient();
+
+const result = await client.generateText({
+  presentation_id: "pres_001",
+  slide_id: "slide_001",
+  slide_number: 1,
+  topics: ["Revenue growth", "Market expansion"],
+  narrative: "Strong Q3 performance",
+  context: {
+    theme: "professional",
+    audience: "executives",
+    slide_title: "Q3 Results"
+  },
+  constraints: {
+    max_characters: 250
+  }
+});
+
+console.log("Generated HTML:", result.content);
+```
+
+#### 3. **cURL Examples (for Testing)**
+
+**Generate Text**:
+```bash
+curl -X POST "https://web-production-e3796.up.railway.app/api/v1/generate/text" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "presentation_id": "pres_001",
+    "slide_id": "slide_001",
+    "slide_number": 1,
+    "topics": ["Revenue growth", "Market expansion"],
+    "narrative": "Strong Q3 performance",
+    "context": {
+      "theme": "professional",
+      "audience": "executives",
+      "slide_title": "Q3 Results"
+    },
+    "constraints": {
+      "max_characters": 250
+    }
+  }'
+```
+
+**Generate Table**:
+```bash
+curl -X POST "https://web-production-e3796.up.railway.app/api/v1/generate/table" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "presentation_id": "pres_001",
+    "slide_id": "slide_002",
+    "slide_number": 2,
+    "description": "Regional revenue comparison Q2 vs Q3",
+    "data": {
+      "Q2": {"North America": 45.2, "Europe": 32.1},
+      "Q3": {"North America": 58.3, "Europe": 39.4}
+    },
+    "context": {
+      "theme": "professional",
+      "audience": "executives",
+      "slide_title": "Regional Performance"
+    }
+  }'
+```
+
+**Check Health**:
+```bash
+curl https://web-production-e3796.up.railway.app/health
+```
+
+#### 4. **REST API Client (Generic)**
+
+For any HTTP client library:
+
+**Base Configuration**:
+- **Base URL**: `https://web-production-e3796.up.railway.app`
+- **Content-Type**: `application/json`
+- **Timeout**: 30 seconds (LLM generation can take 5-15 seconds)
+- **Retry Policy**: Recommended with exponential backoff
+
+**Endpoints**:
+- `POST /api/v1/generate/text` - Generate HTML text
+- `POST /api/v1/generate/table` - Generate HTML table
+- `POST /api/v1/generate/batch/text` - Batch text generation
+- `POST /api/v1/generate/batch/table` - Batch table generation
+- `GET /api/v1/session/{presentation_id}` - Get session info
+- `DELETE /api/v1/session/{presentation_id}` - Delete session
+- `GET /health` - Health check
+- `GET /api/v1/health` - API health check
+
+### 📊 Response Format
+
+#### Text Generation Response
+```json
+{
+  "content": "<p>Generated HTML content...</p>",
+  "metadata": {
+    "word_count": 42,
+    "target_word_count": 50,
+    "variance_percent": -16.0,
+    "within_tolerance": false,
+    "html_tags_used": ["p", "strong", "ul", "li"],
+    "generation_time_ms": 8500.0,
+    "model_used": "gemini-2.5-flash",
+    "provider": "gemini",
+    "prompt_tokens": 1200,
+    "completion_tokens": 150,
+    "total_tokens": 1350
+  }
+}
+```
+
+#### Table Generation Response
+```json
+{
+  "html": "<table class=\"data-table\">...</table>",
+  "metadata": {
+    "rows": 4,
+    "columns": 4,
+    "data_points": 16,
+    "has_header": true,
+    "numeric_columns": 3,
+    "generation_time_ms": 9200.0,
+    "model_used": "gemini-2.5-flash",
+    "provider": "gemini",
+    "table_classes": ["data-table", "numeric", "metric"]
+  }
+}
+```
+
+### 🔄 Session Management
+
+The API automatically manages sessions per `presentation_id`:
+
+1. **Automatic Session Creation**: First request with a `presentation_id` creates a session
+2. **Context Retention**: Maintains history of last 5 slides for content flow
+3. **Session TTL**: Sessions expire after 1 hour of inactivity
+4. **Session Info**: Query session status with `GET /api/v1/session/{presentation_id}`
+5. **Cleanup**: Delete sessions when presentation is complete
+
+**Best Practices**:
+- Use consistent `presentation_id` across all slides in a presentation
+- Delete sessions after presentation generation completes
+- Sessions auto-expire after 1 hour (configurable)
+
+### ⚡ Performance Considerations
+
+- **Average Response Time**: 5-15 seconds (LLM generation)
+- **Concurrent Requests**: Supports up to 10 concurrent requests
+- **Rate Limiting**: No rate limiting currently (use responsibly)
+- **Timeout**: Set client timeout to 30 seconds minimum
+- **Caching**: Context cached per session (1 hour TTL)
+
+### 🛡️ Error Handling
+
+**Common HTTP Status Codes**:
+- `200 OK` - Successful generation
+- `400 Bad Request` - Invalid request format
+- `404 Not Found` - Session or endpoint not found
+- `422 Unprocessable Entity` - Validation error
+- `500 Internal Server Error` - Server error (retry recommended)
+- `503 Service Unavailable` - Service temporarily unavailable
+
+**Example Error Response**:
+```json
+{
+  "detail": "Error message describing the issue"
+}
+```
+
+**Recommended Error Handling**:
+```python
+try:
+    result = client.generate_text(...)
+except requests.exceptions.HTTPError as e:
+    if e.response.status_code == 422:
+        print(f"Validation error: {e.response.json()}")
+    elif e.response.status_code >= 500:
+        print("Server error, retrying...")
+        # Implement retry logic
+    else:
+        print(f"Error: {e}")
+except requests.exceptions.Timeout:
+    print("Request timed out, LLM generation may take longer")
+```
+
+### 📚 Interactive API Documentation
+
+**Swagger UI**: https://web-production-e3796.up.railway.app/docs
+
+Features:
+- Try out all endpoints directly in browser
+- See request/response schemas
+- View example payloads
+- Test authentication and headers
+
+### 🔗 Integration with Content Orchestrator
+
+**Example Integration in Content Orchestrator**:
+
+```python
+# In Content Orchestrator configuration
+TEXT_TABLE_BUILDER_URL = "https://web-production-e3796.up.railway.app"
+TEXT_TABLE_BUILDER_TIMEOUT = 30
+
+# In your content generation logic
+from clients.text_table_client import TextTableBuilderClient
+
+class ContentOrchestrator:
+    def __init__(self):
+        self.text_table_client = TextTableBuilderClient(
+            base_url=TEXT_TABLE_BUILDER_URL
+        )
+
+    def enrich_slide_with_text(self, slide_data: dict) -> dict:
+        """Enrich slide with generated text content."""
+        result = self.text_table_client.generate_text(
+            presentation_id=slide_data["presentation_id"],
+            slide_id=slide_data["slide_id"],
+            slide_number=slide_data["slide_number"],
+            topics=slide_data["key_points"],
+            narrative=slide_data["narrative"],
+            context={
+                "theme": slide_data["theme"],
+                "audience": slide_data["audience"],
+                "slide_title": slide_data["title"]
+            },
+            constraints={
+                "max_characters": slide_data.get("max_characters", 300)
+            }
+        )
+
+        slide_data["enriched_content"] = result["content"]
+        slide_data["content_metadata"] = result["metadata"]
+        return slide_data
+```
+
+### 🚀 Quick Start Integration
+
+**Minimal Integration** (5 minutes):
+
+```python
+import requests
+
+API_URL = "https://web-production-e3796.up.railway.app/api/v1"
+
+# Generate text for a slide
+response = requests.post(
+    f"{API_URL}/generate/text",
+    json={
+        "presentation_id": "my_pres",
+        "slide_id": "slide_1",
+        "slide_number": 1,
+        "topics": ["Topic 1", "Topic 2"],
+        "narrative": "Brief narrative",
+        "context": {"theme": "professional", "audience": "general", "slide_title": "Title"},
+        "constraints": {"max_characters": 200}
+    },
+    timeout=30
+)
+
+html_content = response.json()["content"]
+print(html_content)
+```
 
 ---
 
