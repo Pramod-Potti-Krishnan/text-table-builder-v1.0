@@ -101,9 +101,27 @@ curl -X POST "https://your-app.railway.app/api/v1/generate/text" \
 https://your-app.railway.app/docs
 ```
 
+## Additional Fix: Boolean Syntax Error
+
+### Problem 2
+```
+NameError: name 'false' is not defined. Did you mean: 'False'?
+```
+
+### Root Cause
+Pydantic model examples used JavaScript-style booleans (`true`, `false`) instead of Python booleans (`True`, `False`).
+
+### Solution
+Updated `app/models/responses.py`:
+- ❌ `"within_tolerance": false`
+- ✅ `"within_tolerance": False`
+- ❌ `"has_header": true`
+- ✅ `"has_header": True`
+
 ## Deployment Status
 
-✅ **Fix Applied**: Commit `6544226`
+✅ **Fix 1 (Imports)**: Commit `6544226`
+✅ **Fix 2 (Booleans)**: Commit `ab3483e`
 ✅ **Pushed to GitHub**: https://github.com/Pramod-Potti-Krishnan/text-table-builder-v1.0
 ⏳ **Railway**: Will auto-deploy from GitHub push
 
