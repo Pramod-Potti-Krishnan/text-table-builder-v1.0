@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 import asyncio
 from threading import Lock
 
-from models.session import SessionContext, SlideContext, SessionCacheEntry
+from app.models.session import SessionContext, SlideContext, SessionCacheEntry
 
 # Redis support (optional)
 try:

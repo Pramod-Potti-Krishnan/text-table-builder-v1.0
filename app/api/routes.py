@@ -10,13 +10,13 @@ import asyncio
 from typing import List
 from fastapi import APIRouter, HTTPException, status
 
-from models.requests import (
+from app.models.requests import (
     TextGenerationRequest,
     TableGenerationRequest,
     BatchTextGenerationRequest,
     BatchTableGenerationRequest
 )
-from models.responses import (
+from app.models.responses import (
     GeneratedText,
     GeneratedTable,
     BatchTextGenerationResponse,
@@ -24,9 +24,9 @@ from models.responses import (
     HealthResponse,
     SessionInfoResponse
 )
-from core.generators import TextGenerator, TableGenerator
-from core.session_manager import get_session_manager
-from core.llm_client import get_llm_client, LLMClientFactory
+from app.core.generators import TextGenerator, TableGenerator
+from app.core.session_manager import get_session_manager
+from app.core.llm_client import get_llm_client, LLMClientFactory
 
 
 logger = logging.getLogger(__name__)

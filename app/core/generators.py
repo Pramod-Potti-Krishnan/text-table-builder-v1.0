@@ -10,12 +10,12 @@ import logging
 import time
 from typing import Dict, Any, List, Optional
 
-from models.requests import TextGenerationRequest, TableGenerationRequest
-from models.responses import GeneratedText, GeneratedTable
-from models.session import SlideContext
-from core.llm_client import get_llm_client, BaseLLMClient
-from core.session_manager import get_session_manager, SessionManager
-from utils.prompt_loader import load_text_generation_prompt, load_table_generation_prompt
+from app.models.requests import TextGenerationRequest, TableGenerationRequest
+from app.models.responses import GeneratedText, GeneratedTable
+from app.models.session import SlideContext
+from app.core.llm_client import get_llm_client, BaseLLMClient
+from app.core.session_manager import get_session_manager, SessionManager
+from app.utils.prompt_loader import load_text_generation_prompt, load_table_generation_prompt
 
 
 logger = logging.getLogger(__name__)
