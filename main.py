@@ -178,9 +178,36 @@ async def root():
         "endpoints": {
             "api": "/api/v1",
             "docs": "/docs",
-            "health": "/api/v1/health"
+            "health": "/health"
         }
     }
+
+
+# Health check endpoint (Railway compatibility)
+@app.get("/health")
+async def health_check_root():
+    """
+    Root-level health check for Railway.
+
+    Railway expects /health endpoint for health checks.
+    """
+    from app.core.llm_client import get_llm_client
+
+    try:
+        llm_client = get_llm_client()
+        return {
+            "status": "healthy",
+            "version": "1.0.0",
+            "service": "text-table-builder",
+            "llm_provider": llm_client.__class__.__name__.replace("Client", "").lower(),
+            "llm_model": llm_client.model
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }
 
 
 # Main entry point (for testing locally)
