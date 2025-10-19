@@ -1,0 +1,32 @@
+# Text and Table Content Builder v1.0 - Python Dependencies
+
+# Core Framework
+fastapi>=0.104.0,<1.0.0
+uvicorn[standard]>=0.24.0,<1.0.0
+pydantic>=2.0.0,<3.0.0
+pydantic-settings>=2.0.0,<3.0.0
+
+# LLM Providers
+google-generativeai>=0.3.0,<1.0.0  # Gemini (default)
+openai>=1.0.0,<2.0.0  # OpenAI (optional)
+anthropic>=0.7.0,<1.0.0  # Claude (optional)
+
+# HTML Processing & Validation
+beautifulsoup4>=4.12.0,<5.0.0
+lxml>=4.9.0,<5.0.0
+html5lib>=1.1,<2.0
+
+# Session Management & Caching
+redis>=5.0.0,<6.0.0  # Optional: For distributed sessions
+aioredis>=2.0.0,<3.0.0  # Async Redis client
+
+# Utilities
+python-dotenv>=1.0.0,<2.0.0
+python-json-logger>=2.0.7,<3.0.0
+httpx>=0.25.0,<1.0.0  # For async HTTP requests
+
+# Development & Testing
+pytest>=7.4.0,<8.0.0
+pytest-asyncio>=0.21.0,<1.0.0
+pytest-cov>=4.1.0,<5.0.0
+black>=23.0.0,<24.0.0
