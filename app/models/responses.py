@@ -31,7 +31,7 @@ class GeneratedText(BaseModel):
                     "word_count": 42,
                     "target_word_count": 50,
                     "variance_percent": -16.0,
-                    "within_tolerance": false,
+                    "within_tolerance": False,
                     "html_tags_used": ["p", "strong", "ul", "li", "span", "em", "mark"],
                     "generation_time_ms": 842,
                     "model_used": "gemini-2.5-flash",
@@ -62,7 +62,7 @@ class GeneratedTable(BaseModel):
                     "rows": 3,
                     "columns": 4,
                     "data_points": 12,
-                    "has_header": true,
+                    "has_header": True,
                     "numeric_columns": 3,
                     "generation_time_ms": 1245,
                     "model_used": "gemini-2.5-flash"
