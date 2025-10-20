@@ -69,7 +69,7 @@ class BaseLLMClient(ABC):
         self,
         model: str,
         temperature: float = 0.7,
-        max_tokens: int = 2048,
+        max_tokens: int = 60000,
         **kwargs
     ):
         self.model = model
@@ -322,7 +322,7 @@ class LLMClientFactory:
         provider: Optional[str] = None,
         model: Optional[str] = None,
         temperature: float = 0.7,
-        max_tokens: int = 2048,
+        max_tokens: int = 60000,
         **kwargs
     ) -> BaseLLMClient:
         """
@@ -417,7 +417,7 @@ def get_llm_client() -> BaseLLMClient:
     - LLM_PROVIDER: gemini, openai, or anthropic
     - LLM_MODEL: Provider-specific model name
     - LLM_TEMPERATURE: Sampling temperature (default: 0.7)
-    - LLM_MAX_TOKENS: Max output tokens (default: 2048)
+    - LLM_MAX_TOKENS: Max output tokens (default: 60000)
 
     Returns:
         Shared LLM client instance
@@ -426,7 +426,7 @@ def get_llm_client() -> BaseLLMClient:
 
     if _llm_client_instance is None:
         temperature = float(os.getenv("LLM_TEMPERATURE", "0.7"))
-        max_tokens = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+        max_tokens = int(os.getenv("LLM_MAX_TOKENS", "60000"))
 
         _llm_client_instance = LLMClientFactory.create_client(
             temperature=temperature,

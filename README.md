@@ -606,7 +606,7 @@ Create a `.env` file from `.env.example`:
 LLM_PROVIDER=gemini  # Options: gemini, openai, anthropic
 LLM_MODEL=gemini-2.0-flash-exp  # Provider-specific model
 LLM_TEMPERATURE=0.7
-LLM_MAX_TOKENS=2048
+LLM_MAX_TOKENS=60000
 
 # API Keys (set the one for your provider)
 GOOGLE_API_KEY=your_google_api_key_here
