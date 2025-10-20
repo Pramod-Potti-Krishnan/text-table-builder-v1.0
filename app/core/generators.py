@@ -66,10 +66,10 @@ class TextGenerator:
                 target_audience=request.context.get("audience")
             )
 
-            # Get previous slides context
+            # Get previous slides context (reduced to 1 slide to minimize input tokens)
             previous_context = await self.session_manager.get_context_summary(
                 request.presentation_id,
-                max_slides=3
+                max_slides=1
             )
 
             # Calculate target word count from max_characters constraint
@@ -266,10 +266,10 @@ class TableGenerator:
                 target_audience=request.context.get("audience")
             )
 
-            # Get previous slides context
+            # Get previous slides context (reduced to 1 slide to minimize input tokens)
             previous_context = await self.session_manager.get_context_summary(
                 request.presentation_id,
-                max_slides=3
+                max_slides=1
             )
 
             # Format data as JSON string
