@@ -10,7 +10,7 @@ import logging
 import time
 from typing import Dict, Any, List, Optional
 
-from app.models.requests import TextGenerationRequest, TableGenerationRequest
+from app.models.requests import TextGenerationRequest, TableGenerationRequest, StructuredTextGenerationRequest, FieldSpec
 from app.models.responses import GeneratedText, GeneratedTable
 from app.models.session import SlideContext
 from app.core.llm_client import get_llm_client, BaseLLMClient
@@ -435,6 +435,408 @@ async def generate_table_content(request: TableGenerationRequest) -> GeneratedTa
         GeneratedTable response
     """
     generator = TableGenerator()
+    return await generator.generate(request)
+
+
+# ============================================================================
+# v1.1: Structured Text Generator with Format Ownership
+# ============================================================================
+
+class StructuredTextGenerator:
+    """
+    Format-aware text generator (v1.1).
+
+    Implements format ownership architecture where:
+    - plain_text fields → generated as plain text (Layout Builder formats)
+    - html fields → generated as rich HTML (Text Service formats)
+
+    Uses 90% threshold validation (hit 90% of any limit: chars, words, or lines).
+    """
+
+    def __init__(
+        self,
+        llm_client: Optional[BaseLLMClient] = None,
+        session_manager: Optional[SessionManager] = None
+    ):
+        """
+        Initialize structured text generator.
+
+        Args:
+            llm_client: LLM client for generation
+            session_manager: Session manager for context
+        """
+        self.llm_client = llm_client or get_llm_client()
+        self.session_manager = session_manager or get_session_manager()
+
+    async def generate(self, request: StructuredTextGenerationRequest) -> Dict[str, Any]:
+        """
+        Generate content for all fields based on format specifications.
+
+        Args:
+            request: Structured text generation request with field specifications
+
+        Returns:
+            Dictionary with generated content for each field
+        """
+        start_time = time.time()
+
+        try:
+            # Get session context
+            session = await self.session_manager.get_or_create_session(
+                presentation_id=request.presentation_id,
+                presentation_theme=request.content_guidance.get("presentation_context", {}).get("theme"),
+                target_audience=request.content_guidance.get("presentation_context", {}).get("audience")
+            )
+
+            # Get previous slides context
+            previous_context = await self.session_manager.get_context_summary(
+                request.presentation_id,
+                max_slides=1
+            )
+
+            # Generate content for each field
+            generated_content = {}
+            field_metadata = {}
+
+            for field_name, field_spec in request.field_specifications.items():
+                logger.info(f"Generating {field_spec.format_type} content for field: {field_name}")
+
+                if field_spec.format_owner == "text_service":
+                    # Text Service owns formatting
+                    if field_spec.format_type == "plain_text":
+                        content, metadata = await self._generate_plain_text(
+                            field_name, field_spec, request
+                        )
+                    else:  # html
+                        content, metadata = await self._generate_html_content(
+                            field_name, field_spec, request, previous_context
+                        )
+
+                    generated_content[field_name] = content
+                    field_metadata[field_name] = metadata
+
+                else:  # layout_builder owns formatting
+                    # Generate plain text only (Layout Builder will format)
+                    content, metadata = await self._generate_plain_text(
+                        field_name, field_spec, request
+                    )
+                    generated_content[field_name] = content
+                    field_metadata[field_name] = metadata
+
+            # Build overall metadata
+            generation_time = time.time() - start_time
+            result = {
+                "layout_id": request.layout_id,
+                "content": generated_content,
+                "metadata": {
+                    "generation_time_ms": round(generation_time * 1000, 2),
+                    "fields_generated": len(generated_content),
+                    "field_metadata": field_metadata
+                }
+            }
+
+            # Update session
+            slide_context = SlideContext(
+                slide_id=request.slide_id,
+                slide_number=request.slide_number,
+                slide_title=generated_content.get("slide_title", request.content_guidance.get("title")),
+                content_summary=f"Structured content for {request.layout_name}",
+                key_themes=request.content_guidance.get("key_points", [])[:3],
+                content_type="structured"
+            )
+
+            await self.session_manager.add_slide_to_session(
+                request.presentation_id,
+                slide_context
+            )
+
+            logger.info(
+                f"Generated structured content for {request.slide_id} ({request.layout_id}): "
+                f"{len(generated_content)} fields in {generation_time:.2f}s"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error generating structured content for {request.slide_id}: {e}")
+            raise
+
+    async def _generate_plain_text(
+        self,
+        field_name: str,
+        field_spec: FieldSpec,
+        request: StructuredTextGenerationRequest
+    ) -> tuple[str, Dict[str, Any]]:
+        """
+        Generate plain text content for a field.
+
+        For plain_text fields owned by layout_builder, we generate
+        simple text without HTML formatting.
+
+        Args:
+            field_name: Name of the field
+            field_spec: Field specification
+            request: Full request context
+
+        Returns:
+            Tuple of (content, metadata)
+        """
+        # Build prompt for plain text generation
+        prompt = f"""Generate plain text content for the '{field_name}' field.
+
+Layout: {request.layout_name} ({request.layout_id})
+Field Type: {field_spec.type}
+Content Guidance:
+- Title: {request.content_guidance.get('title', 'N/A')}
+- Narrative: {request.content_guidance.get('narrative', 'N/A')}
+- Key Points: {', '.join(request.content_guidance.get('key_points', []))}
+
+Constraints:
+- Max characters: {field_spec.max_chars or 'flexible'}
+- Max lines: {field_spec.max_lines or 'flexible'}
+- Format: Plain text ONLY (no HTML, no formatting)
+
+Generate concise, clear text that fits within the constraints. Return ONLY the plain text content, nothing else."""
+
+        # Generate using LLM
+        llm_response = await self.llm_client.generate(prompt)
+        content = llm_response.content.strip()
+
+        # Validate against constraints
+        validation = self._validate_plain_text(content, field_spec)
+
+        metadata = {
+            "format_type": "plain_text",
+            "format_owner": field_spec.format_owner,
+            "char_count": len(content),
+            "line_count": len(content.split('\n')),
+            "validation": validation,
+            "model_used": llm_response.model
+        }
+
+        return content, metadata
+
+    async def _generate_html_content(
+        self,
+        field_name: str,
+        field_spec: FieldSpec,
+        request: StructuredTextGenerationRequest,
+        previous_context: Optional[str] = None
+    ) -> tuple[str, Dict[str, Any]]:
+        """
+        Generate HTML content for a field.
+
+        For html fields owned by text_service, we generate rich HTML
+        with proper structure (ul>li, p, etc.) and validate density.
+
+        Args:
+            field_name: Name of the field
+            field_spec: Field specification
+            request: Full request context
+            previous_context: Context from previous slides
+
+        Returns:
+            Tuple of (content, metadata)
+        """
+        # Build prompt for HTML generation
+        prompt = f"""Generate HTML content for the '{field_name}' field.
+
+Layout: {request.layout_name} ({request.layout_id})
+Field Type: {field_spec.type}
+Content Guidance:
+- Title: {request.content_guidance.get('title', 'N/A')}
+- Narrative: {request.content_guidance.get('narrative', 'N/A')}
+- Key Points: {', '.join(request.content_guidance.get('key_points', []))}
+
+HTML Structure Requirements:
+- Expected structure: {field_spec.expected_structure or 'flexible'}
+- Use semantic HTML tags
+- NO empty elements (filter out empty <li>, <p>, etc.)
+- Ensure proper nesting for sub-bullets (use nested <ul> or <ol>)
+
+Content Constraints (90% Threshold):
+- Max characters: {field_spec.max_chars or 'flexible'}
+- Max lines: {field_spec.max_lines or 'flexible'}
+- Validation threshold: {field_spec.validation_threshold or 0.9}
+- Goal: Hit at least {int((field_spec.validation_threshold or 0.9) * 100)}% of ANY limit for visual balance
+
+{f"Previous slide context:\\n{previous_context}" if previous_context else ""}
+
+Generate rich, well-formatted HTML content. Ensure good visual density without overcrowding.
+Return ONLY the HTML content, no markdown code blocks or explanations."""
+
+        # Generate using LLM
+        llm_response = await self.llm_client.generate(prompt)
+        html_content = self._clean_html_output(llm_response.content)
+
+        # Validate HTML density (90% threshold)
+        validation = self._validate_html_density(html_content, field_spec)
+
+        # Extract HTML structure info
+        html_tags = self._extract_html_tags(html_content)
+        word_count = self._count_words(html_content)
+
+        metadata = {
+            "format_type": "html",
+            "format_owner": field_spec.format_owner,
+            "char_count": len(html_content),
+            "word_count": word_count,
+            "html_tags_used": html_tags,
+            "validation": validation,
+            "model_used": llm_response.model
+        }
+
+        return html_content, metadata
+
+    def _validate_plain_text(
+        self,
+        content: str,
+        field_spec: FieldSpec
+    ) -> Dict[str, Any]:
+        """
+        Validate plain text against constraints.
+
+        Args:
+            content: Generated plain text
+            field_spec: Field specification
+
+        Returns:
+            Validation result dictionary
+        """
+        char_count = len(content)
+        line_count = len(content.split('\n'))
+
+        validation = {
+            "valid": True,
+            "violations": []
+        }
+
+        if field_spec.max_chars and char_count > field_spec.max_chars:
+            validation["valid"] = False
+            validation["violations"].append(
+                f"Exceeds max_chars: {char_count} > {field_spec.max_chars}"
+            )
+
+        if field_spec.max_lines and line_count > field_spec.max_lines:
+            validation["valid"] = False
+            validation["violations"].append(
+                f"Exceeds max_lines: {line_count} > {field_spec.max_lines}"
+            )
+
+        return validation
+
+    def _validate_html_density(
+        self,
+        html_content: str,
+        field_spec: FieldSpec
+    ) -> Dict[str, Any]:
+        """
+        Validate HTML content using 90% threshold model.
+
+        Checks if content hits at least 90% of ANY limit (chars, words, or lines).
+        This ensures visual balance without rigid constraints.
+
+        Args:
+            html_content: Generated HTML
+            field_spec: Field specification
+
+        Returns:
+            Validation result with density metrics
+        """
+        import re
+
+        # Metrics
+        char_count = len(html_content)
+        word_count = self._count_words(html_content)
+        line_count = len(html_content.split('\n'))
+
+        threshold = field_spec.validation_threshold or 0.9
+        densities = []
+
+        # Calculate density for each constraint
+        if field_spec.max_chars:
+            char_density = char_count / field_spec.max_chars
+            densities.append(("chars", char_density, char_count, field_spec.max_chars))
+
+        if field_spec.max_words:
+            word_density = word_count / field_spec.max_words
+            densities.append(("words", word_density, word_count, field_spec.max_words))
+
+        if field_spec.max_lines:
+            line_density = line_count / field_spec.max_lines
+            densities.append(("lines", line_density, line_count, field_spec.max_lines))
+
+        # Validation result
+        max_density = max([d[1] for d in densities]) if densities else 0
+        meets_threshold = max_density >= threshold
+
+        validation = {
+            "valid": max_density <= 1.0,  # Must not exceed any limit
+            "meets_threshold": meets_threshold,
+            "max_density": round(max_density, 2),
+            "threshold": threshold,
+            "densities": {
+                d[0]: {
+                    "density": round(d[1], 2),
+                    "actual": d[2],
+                    "max": d[3]
+                }
+                for d in densities
+            },
+            "violations": []
+        }
+
+        # Check for violations
+        for metric, density, actual, max_val in densities:
+            if density > 1.0:
+                validation["violations"].append(
+                    f"Exceeds {metric} limit: {actual} > {max_val}"
+                )
+
+        if not meets_threshold:
+            validation["warnings"] = [
+                f"Content density ({max_density:.0%}) below threshold ({threshold:.0%}). "
+                f"Consider adding more content for better visual balance."
+            ]
+
+        return validation
+
+    def _clean_html_output(self, content: str) -> str:
+        """Clean LLM output to extract pure HTML."""
+        content = content.strip()
+        if content.startswith("```html"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        return content.strip()
+
+    def _count_words(self, html_content: str) -> int:
+        """Count words in HTML content (excluding tags)."""
+        import re
+        text_only = re.sub(r'<[^>]+>', '', html_content)
+        words = text_only.split()
+        return len(words)
+
+    def _extract_html_tags(self, html_content: str) -> List[str]:
+        """Extract list of unique HTML tags used."""
+        import re
+        tags = re.findall(r'<(\w+)', html_content)
+        return sorted(set(tags))
+
+
+async def generate_structured_content(request: StructuredTextGenerationRequest) -> Dict[str, Any]:
+    """
+    Generate structured content with format specifications (v1.1 convenience function).
+
+    Args:
+        request: Structured text generation request
+
+    Returns:
+        Dictionary with generated content and metadata
+    """
+    generator = StructuredTextGenerator()
     return await generator.generate(request)
 
 

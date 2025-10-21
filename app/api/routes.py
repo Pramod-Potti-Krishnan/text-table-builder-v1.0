@@ -14,7 +14,8 @@ from app.models.requests import (
     TextGenerationRequest,
     TableGenerationRequest,
     BatchTextGenerationRequest,
-    BatchTableGenerationRequest
+    BatchTableGenerationRequest,
+    StructuredTextGenerationRequest  # v1.1
 )
 from app.models.responses import (
     GeneratedText,
@@ -24,7 +25,7 @@ from app.models.responses import (
     HealthResponse,
     SessionInfoResponse
 )
-from app.core.generators import TextGenerator, TableGenerator
+from app.core.generators import TextGenerator, TableGenerator, StructuredTextGenerator  # v1.1 generator
 from app.core.session_manager import get_session_manager
 from app.core.llm_client import get_llm_client, LLMClientFactory
 
@@ -49,7 +50,7 @@ async def health_check():
 
         return HealthResponse(
             status="healthy",
-            version="1.0.0",
+            version="1.1.0",  # v1.1: Added structured generation with format ownership
             service="text-table-builder",
             llm_provider=llm_client.__class__.__name__.replace("Client", "").lower(),
             llm_model=llm_client.model
@@ -69,11 +70,12 @@ async def root():
     """
     return {
         "service": "Text and Table Content Builder",
-        "version": "1.0.0",
+        "version": "1.1.0",  # v1.1: Added structured generation
         "description": "LLM-powered content generation for presentations",
         "endpoints": {
             "health": "/health",
             "text": "/generate/text",
+            "structured": "/generate/structured",  # v1.1: Format-aware generation
             "table": "/generate/table",
             "batch_text": "/generate/batch/text",
             "batch_table": "/generate/batch/table",
@@ -209,6 +211,95 @@ async def generate_batch_text(batch_request: BatchTextGenerationRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Batch text generation failed: {str(e)}"
+        )
+
+
+# v1.1: Structured Text Generation Endpoint (Format Ownership)
+
+@router.post(
+    "/generate/structured",
+    tags=["Generation"],
+    summary="Generate structured content with format specifications (v1.1)",
+    description="Generate content for all fields based on format ownership specifications"
+)
+async def generate_structured_text(request: StructuredTextGenerationRequest):
+    """
+    Generate structured content with format ownership (v1.1).
+
+    This endpoint implements the Format Ownership Architecture where:
+    - plain_text fields → generated as plain text (Layout Builder formats)
+    - html fields → generated as rich HTML (Text Service formats)
+
+    Uses 90% threshold validation to ensure visual balance:
+    - Hit at least 90% of ANY limit (chars, words, or lines)
+    - Flexible content density without rigid constraints
+
+    Request includes:
+    - layout_id: Selected layout (L01-L24)
+    - field_specifications: Format specs for each field
+    - content_guidance: Slide narrative and key points
+    - layout_schema: Complete schema for reference
+
+    Returns dictionary with:
+    - layout_id: Layout used
+    - content: Generated content for all fields
+    - metadata: Generation time, field metadata, validation results
+
+    Example response:
+    {
+        "layout_id": "L05",
+        "content": {
+            "slide_title": "Key Benefits",
+            "bullets": "<ul><li>Cost savings...</li><li>Efficiency...</li></ul>"
+        },
+        "metadata": {
+            "generation_time_ms": 1234.5,
+            "fields_generated": 2,
+            "field_metadata": {
+                "slide_title": {
+                    "format_type": "plain_text",
+                    "format_owner": "layout_builder",
+                    "char_count": 12,
+                    "validation": {"valid": true}
+                },
+                "bullets": {
+                    "format_type": "html",
+                    "format_owner": "text_service",
+                    "word_count": 45,
+                    "html_tags_used": ["ul", "li"],
+                    "validation": {
+                        "valid": true,
+                        "meets_threshold": true,
+                        "max_density": 0.92,
+                        "threshold": 0.9
+                    }
+                }
+            }
+        }
+    }
+    """
+    try:
+        logger.info(
+            f"Structured text generation request for slide {request.slide_id} "
+            f"(layout: {request.layout_id})"
+        )
+
+        generator = StructuredTextGenerator()
+        result = await generator.generate(request)
+
+        logger.info(
+            f"Structured content generated for {request.slide_id}: "
+            f"{result['metadata']['fields_generated']} fields in "
+            f"{result['metadata']['generation_time_ms']:.0f}ms"
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Structured text generation failed for {request.slide_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Structured text generation failed: {str(e)}"
         )
 
 
