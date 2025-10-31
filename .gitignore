@@ -59,3 +59,10 @@ htmlcov/
 
 # Redis dumps
 dump.rdb
+
+# Security: Prevent accidental commit of documentation with sensitive data
+SECURITY_UPDATE_*.md
+SECURITY_FIX_*.md
+DEPLOYMENT_*.md
+RAILWAY_DEPLOYMENT_*.md
+*_DEPLOYMENT_*.md
