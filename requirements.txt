@@ -7,7 +7,8 @@ pydantic>=2.0.0,<3.0.0
 pydantic-settings>=2.0.0,<3.0.0
 
 # LLM Providers
-google-generativeai>=0.3.0,<1.0.0  # Gemini (default)
+# v3.3 Security Update: Vertex AI with ADC authentication (no API keys!)
+google-cloud-aiplatform>=1.70.0  # Vertex AI for Gemini (secure ADC authentication)
 openai>=1.0.0,<2.0.0  # OpenAI (optional)
 anthropic>=0.7.0,<1.0.0  # Claude (optional)
 

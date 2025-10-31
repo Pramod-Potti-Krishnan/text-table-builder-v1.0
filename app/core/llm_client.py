@@ -14,10 +14,8 @@ from dataclasses import dataclass
 from enum import Enum
 
 # Provider SDKs
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
+# v3.3 Security Update: Using Vertex AI SDK (google-cloud-aiplatform) instead of
+# the old google-generativeai SDK. Vertex AI provides secure ADC authentication.
 
 try:
     from openai import AsyncOpenAI
@@ -98,45 +96,81 @@ class BaseLLMClient(ABC):
 
 class GeminiClient(BaseLLMClient):
     """
-    Google Gemini LLM client.
+    Google Gemini LLM client using Vertex AI.
 
-    Uses google-generativeai SDK.
+    v3.3 Security Update: Uses service account authentication instead of API keys.
     """
 
     def __init__(
         self,
-        model: str = "gemini-2.0-flash-exp",
-        api_key: Optional[str] = None,
+        model: str = "gemini-2.5-flash",
         **kwargs
     ):
         super().__init__(model, **kwargs)
 
-        if genai is None:
+        # Import Vertex AI dependencies
+        try:
+            import vertexai
+            from google.oauth2 import service_account
+            from vertexai.preview.generative_models import GenerativeModel, GenerationConfig
+        except ImportError:
             raise ImportError(
-                "google-generativeai not installed. "
-                "Install with: pip install google-generativeai"
+                "Vertex AI not installed. "
+                "Install with: pip install google-cloud-aiplatform>=1.70.0"
             )
 
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
-        if not self.api_key:
-            raise ValueError("GOOGLE_API_KEY not provided")
+        # Initialize Vertex AI with service account credentials
+        service_account_json = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+        project_id = os.getenv("GCP_PROJECT_ID")
+        location = os.getenv("GCP_LOCATION", "us-central1")
 
-        # Configure Gemini
-        genai.configure(api_key=self.api_key)
-        self.client = genai.GenerativeModel(self.model)
+        if not project_id:
+            raise ValueError("GCP_PROJECT_ID environment variable required")
 
-        logger.info(f"Initialized Gemini client with model: {self.model}")
+        try:
+            if service_account_json:
+                # Railway/Production: Use service account JSON from environment
+                import json
+                credentials_dict = json.loads(service_account_json)
+                credentials = service_account.Credentials.from_service_account_info(
+                    credentials_dict,
+                    scopes=['https://www.googleapis.com/auth/cloud-platform']
+                )
+
+                vertexai.init(
+                    project=project_id,
+                    location=location,
+                    credentials=credentials
+                )
+                logger.info(f"Initialized Vertex AI with service account (project: {project_id})")
+            else:
+                # Local development: Use Application Default Credentials
+                vertexai.init(
+                    project=project_id,
+                    location=location
+                )
+                logger.info(f"Initialized Vertex AI with ADC (project: {project_id})")
+
+            # Create Gemini model instance
+            self.client = GenerativeModel(self.model)
+            logger.info(f"Initialized Gemini model: {self.model}")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize Vertex AI: {e}")
+            raise ValueError(f"Vertex AI initialization failed: {e}")
 
     async def generate(self, prompt: str) -> LLMResponse:
-        """Generate content using Gemini."""
+        """Generate content using Gemini via Vertex AI."""
         start_time = time.time()
 
         try:
-            # Gemini configuration
-            generation_config = {
-                "temperature": self.temperature,
-                "max_output_tokens": self.max_tokens,
-            }
+            # Import GenerationConfig
+            from vertexai.preview.generative_models import GenerationConfig
+
+            generation_config = GenerationConfig(
+                temperature=self.temperature,
+                max_output_tokens=self.max_tokens,
+            )
 
             # Generate content
             response = self.client.generate_content(
@@ -146,29 +180,35 @@ class GeminiClient(BaseLLMClient):
 
             latency_ms = (time.time() - start_time) * 1000
 
-            # Extract token usage (if available)
-            prompt_tokens = getattr(response.usage_metadata, 'prompt_token_count', 0) if hasattr(response, 'usage_metadata') else 0
-            completion_tokens = getattr(response.usage_metadata, 'candidates_token_count', 0) if hasattr(response, 'usage_metadata') else 0
+            # Extract content and token usage
+            content = response.text if hasattr(response, 'text') else str(response)
+
+            # Token usage (if available)
+            prompt_tokens = 0
+            completion_tokens = 0
+            if hasattr(response, 'usage_metadata'):
+                prompt_tokens = getattr(response.usage_metadata, 'prompt_token_count', 0)
+                completion_tokens = getattr(response.usage_metadata, 'candidates_token_count', 0)
 
             return LLMResponse(
-                content=response.text,
+                content=content,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 total_tokens=prompt_tokens + completion_tokens,
                 model=self.model,
-                provider="gemini",
+                provider="gemini-vertex",
                 latency_ms=latency_ms,
-                finish_reason=getattr(response.candidates[0], 'finish_reason', '') if response.candidates else '',
+                finish_reason="",
                 raw_response=response
             )
 
         except Exception as e:
-            logger.error(f"Gemini generation error: {e}")
+            logger.error(f"Gemini Vertex AI generation error: {e}")
             raise
 
     def is_configured(self) -> bool:
-        """Check if Gemini is configured."""
-        return self.api_key is not None and genai is not None
+        """Check if Gemini Vertex AI is configured."""
+        return os.getenv("GCP_PROJECT_ID") is not None
 
 
 class OpenAIClient(BaseLLMClient):
@@ -390,8 +430,8 @@ class LLMClientFactory:
         """
         available = []
 
-        # Check Gemini
-        if genai is not None and os.getenv("GOOGLE_API_KEY"):
+        # Check Gemini (v3.3: Vertex AI with service account or ADC)
+        if os.getenv("GCP_PROJECT_ID"):
             available.append("gemini")
 
         # Check OpenAI
