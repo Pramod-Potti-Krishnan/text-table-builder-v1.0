@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 
 from app.api.routes import router
 from app.core.session_manager import get_session_manager
+from app.middleware.ip_allowlist import IPAllowlistMiddleware
 
 
 # Load environment variables
@@ -160,6 +161,16 @@ app.add_middleware(
 )
 
 logger.info(f"CORS configured with origins: {origins}")
+
+# Configure IP allowlist middleware
+ALLOWED_IPS = os.getenv("ALLOWED_IPS", "")
+if ALLOWED_IPS:
+    allowed_ips_list = [ip.strip() for ip in ALLOWED_IPS.split(",") if ip.strip()]
+    app.add_middleware(IPAllowlistMiddleware, allowed_ips=allowed_ips_list)
+    logger.info(f"🔒 IP Allowlist: Enabled with {len(allowed_ips_list)} allowed IPs")
+else:
+    logger.warning("⚠️  IP Allowlist: DISABLED (no ALLOWED_IPS environment variable configured)")
+    logger.warning("⚠️  Service is publicly accessible - set ALLOWED_IPS to restrict access")
 
 # Include API routes
 app.include_router(router, prefix="/api/v1")

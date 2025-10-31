@@ -98,6 +98,60 @@ The Railway project must have **Multi-Factor Authentication (MFA)** enabled for 
 - Use Railway's **Secrets** feature for sensitive environment variables
 - Enable Railway's **Audit Log** to track configuration changes
 
+### IP Allowlist (v3.3 Security Feature)
+
+The application implements **IP-based access control** to restrict API access to authorized IP addresses only. This prevents unauthorized usage even if someone discovers your Railway URL.
+
+**Features**:
+- Restricts all API endpoints to whitelisted IPs
+- Health check endpoint (`/health`) remains publicly accessible for Railway monitoring
+- Supports both IPv4 and IPv6 addresses
+- Handles proxy headers (X-Forwarded-For, X-Real-IP) correctly on Railway
+- Logs all access attempts for security auditing
+
+**Configuration**:
+```bash
+# Format: Comma-separated list of IP addresses
+ALLOWED_IPS=127.0.0.1,::1,174.206.231.36,<director-agent-railway-ip>
+```
+
+**Local Development IPs to Include**:
+- `127.0.0.1` - IPv4 localhost
+- `::1` - IPv6 localhost
+- Your development machine's public IP (find with: `curl ifconfig.me`)
+
+**Railway Production IPs to Include**:
+- Your development machine IP (for testing)
+- Director Agent's Railway outbound IP
+- Any other authorized services that need to call this API
+
+**How to Find Railway Service Outbound IP**:
+1. Check Railway deployment logs for IP addresses
+2. Or temporarily disable IP allowlist and check logs for incoming IPs
+3. Or contact Railway support for static IP information
+
+**Security Benefits**:
+- Prevents quota exhaustion from unauthorized users
+- Reduces attack surface for DDoS attempts
+- Provides audit trail of access attempts
+- No impact on Railway's health check monitoring
+
+**Testing IP Allowlist**:
+```bash
+# Should succeed (your IP is allowed)
+curl https://web-production-e3796.up.railway.app/health
+
+# API endpoints require allowed IP
+curl -X POST https://web-production-e3796.up.railway.app/api/v1/generate/text \
+  -H "Content-Type: application/json" \
+  -d '{"slide_id": "test", ...}'
+```
+
+**Important Notes**:
+- Leave `ALLOWED_IPS` empty to disable restrictions (NOT RECOMMENDED for production)
+- Update the allowlist whenever your IP changes or new services are authorized
+- Railway environment variable changes take effect immediately (no redeployment needed)
+
 ### Private Networking
 
 Any database connections should use Railway's **private networking** feature, not the public internet. This ensures database traffic never leaves Railway's internal network.
